@@ -64,16 +64,19 @@ volatile unsigned int * generateApplePosition()
     return (int *) ((0 + lcg_rand() % (2500 - 0 + 1)) + 0xf0000014);
 }
 
-void drawSnake(int size, int speed)
+int drawSnake(int size, int speed)
 {
 
     for(int i = size; i > 0; i--)
-    {
         snake[i] = snake[i - 1];
-        printSquare(snake[i], 0xFFD700);
-    }
-    snake[0] += speed;
+
+    snake[0] += (speed * 2);
+
+    if(*snake[0] == 0xFFD700)
+        return 0;
+
     printSquare(snake[0], 0xFFD700);
+    return 1;
 
 }
 
@@ -85,7 +88,6 @@ void main()
     int counter = 0;
 
     snake[size] = initialPosition;
-
     int speed = 1;
 
     snake[size] += 10;
@@ -104,9 +106,8 @@ void main()
             speed = 1;
 
         printSquare(snake[size], 0x00);
-        drawSnake(size, speed);
 
-        if(0x01 & *switch_base || isInside(snake[0]))
+        if(!drawSnake(size, speed) || 0x01 & *switch_base || isInside(snake[0]))
         {
             for(int i = 0; i < size; i++)
             {
@@ -121,9 +122,9 @@ void main()
             counter = 0;
         }
 
-        for(int i=0; i < 500; i++); // delay
+        for(int i=0; i < 1500; i++); // delay
         counter++;
-        if(counter >= 10)
+        if(counter >= 30)
         {
             counter = 0;
             size++;
