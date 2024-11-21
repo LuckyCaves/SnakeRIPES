@@ -2,8 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define SW0 (0x01)
-
 volatile unsigned int * initialPosition = (int*) LED_MATRIX_0_BASE;
 volatile unsigned int * d_pad_up = (int*) D_PAD_0_UP;
 volatile unsigned int * d_pad_do = (int*) D_PAD_0_DOWN;
@@ -13,13 +11,10 @@ volatile unsigned int * switch_base = (int*) SWITCHES_0_BASE;
 
 const volatile unsigned int * TOP = (int *) LED_MATRIX_0_BASE;
 const volatile unsigned int * BOTTOM = (int *) LED_MATRIX_0_BASE + (LED_MATRIX_0_SIZE / 4);
-volatile unsigned int * applePosition = 0;
-volatile unsigned int * snake[100]; 
+volatile unsigned int * snake[100];
+volatile unsigned int * headPointer[2];
+volatile unsigned int * position;
 
-#define MULTIPLIER 1103515245 
-#define INCREMENT 12345 
-#define MODULUS 2147483648 
-unsigned int seed = 1;
 
 void clean()
 {
@@ -31,7 +26,7 @@ void clean()
     }
 }
 
-void printSquare(volatile unsigned int* led, int color)
+void printSquare(volatile unsigned int* led, unsigned int color)
 {
 
     *led = color;
@@ -41,30 +36,28 @@ void printSquare(volatile unsigned int* led, int color)
     *led = color;
     led++;
     *led = color;
-    led -= LED_MATRIX_0_WIDTH;
-
 }
 
-int isInside(volatile unsigned int* snake)
+int isInside(volatile unsigned int* pos)
 {
-    int posIndex = snake - (volatile unsigned int * ) LED_MATRIX_0_BASE;
+    int posIndex = pos - (volatile unsigned int * ) LED_MATRIX_0_BASE;
     int x = posIndex % LED_MATRIX_0_WIDTH;
     int y = posIndex / LED_MATRIX_0_WIDTH;
 
     return x == 0 || x == LED_MATRIX_0_WIDTH || y == 0 || y == LED_MATRIX_0_HEIGHT;
 }
 
-unsigned int lcg_rand() {
-    seed = (MULTIPLIER * seed + INCREMENT) % MODULUS;
-    return seed;
-}
-
-volatile unsigned int * generateApplePosition()
+void generateApple()
 {
-    return (int *) ((0 + lcg_rand() % (2500 - 0 + 1)) + 0xf0000014);
+
+    int r = rand() % 5000;
+    position = (int *) (r + 0xF0000014);
+
+    printSquare(position, 0xFF5800);
+
 }
 
-int drawSnake(int size, int speed)
+void updateSnake(int size, int speed)
 {
 
     for(int i = size; i > 0; i--)
@@ -72,12 +65,31 @@ int drawSnake(int size, int speed)
 
     snake[0] += (speed * 2);
 
-    if(*snake[0] == 0xFFD700)
-        return 0;
+}
 
-    printSquare(snake[0], 0xFFD700);
-    return 1;
-
+void updateHead(int speed)
+{
+    if(speed == -1)
+    {
+        headPointer[0] = snake[0] - 1;
+        headPointer[1] = snake[0] - 1 - LED_MATRIX_0_WIDTH;
+    }
+    else if(speed == LED_MATRIX_0_WIDTH)
+    {
+        headPointer[0] = snake[0];
+        headPointer[1] = snake[0] - 1;
+    }
+    else if(speed == -LED_MATRIX_0_WIDTH)
+    {
+        headPointer[0] = snake[0] - LED_MATRIX_0_WIDTH;
+        headPointer[1] = snake[0] - 1 - LED_MATRIX_0_WIDTH;
+    }
+    else
+    {
+        headPointer[0] = snake[0];
+        headPointer[1] = snake[0] - LED_MATRIX_0_WIDTH;
+    }
+    
 }
 
 void main()
@@ -85,13 +97,11 @@ void main()
     clean();
 
     int size = 0;
-    int counter = 0;
-
-    snake[size] = initialPosition;
     int speed = 1;
 
-    snake[size] += 10;
-    snake[size] += 500;
+    snake[0] = initialPosition;
+
+    generateApple();
 
     while(1)
     {
@@ -106,8 +116,10 @@ void main()
             speed = 1;
 
         printSquare(snake[size], 0x00);
+        updateSnake(size, speed);
+        updateHead(speed);
 
-        if(!drawSnake(size, speed) || 0x01 & *switch_base || isInside(snake[0]))
+        if(*headPointer[0] == 0xFFD700 || 0x01 & *switch_base || isInside(snake[0]))
         {
             for(int i = 0; i < size; i++)
             {
@@ -115,20 +127,21 @@ void main()
             }
             clean();
             size = 0;
+            speed = 1;
             snake[0] = initialPosition;
             snake[0] += 10;
             snake[0] += 500;
-            speed = 1;
-            counter = 0;
+            generateApple();
         }
-
-        for(int i=0; i < 1500; i++); // delay
-        counter++;
-        if(counter >= 30)
+        else if(*headPointer[0] == 0xFF5800 || *headPointer[1] == 0xFF5800)
         {
-            counter = 0;
             size++;
             snake[size] = snake[size - 1];
+            printSquare(position, 0x00);
+            generateApple();
         }
-    } 
+
+        printSquare(snake[0], 0xFFD700);
+        for(int j = 0; j < 1750; j++);//delay
+    }
 }
